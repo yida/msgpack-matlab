@@ -1,8 +1,8 @@
 /* 
  * MessagePack for Matlab
  *
- *  Copyright [2013] [Yida Zhang <yida@seas.upenn.edu>
- *  University of Pennsylvania
+ * Copyright [2013] [ Yida Zhang <yida@seas.upenn.edu> ]
+ *              University of Pennsylvania
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
