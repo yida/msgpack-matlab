@@ -18,3 +18,14 @@ obj = msgpack('unpack', msg)
 Streaming unpacker:
 objs = msgpack('unpacker', msg)
   return Cell containing numericArray, charArray, Cell or Struct
+
+#Issue
+
+  1. Since Matlab string is two-bytes (UTF16), 
+    >> msgpack('unpack', msgpack('pack', 'hello')) returns
+    >> h e l l o
+
+    For correct string size, use
+    >> msg = msgpack('pack', uint8('hello'))
+    >> char(msgpack('unpack', msg))'
+    >> hello

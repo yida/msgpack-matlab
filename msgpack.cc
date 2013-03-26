@@ -1,18 +1,11 @@
 /* 
- *  Copyright [2013] [Yida Zhang]
-
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
-
- *     http://www.apache.org/licenses/LICENSE-2.0
-
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.*
  * MessagePack for Matlab
+ *
+ * mex -O msgpack.cc
+ *
+ * Yida Zhang, yida@seas.upenn.edu
+ *
+ * University of Pennsylvania
  *
  * */
 
@@ -68,10 +61,12 @@ mxArray* mex_unpack_double(msgpack_object obj) {
 }
 
 mxArray* mex_unpack_raw(msgpack_object obj) {
-  mwSize dims[] = {1, obj.via.raw.size/2};
-  mxArray* ret = mxCreateCharArray(2, dims);
-  char *ptr = (char*)mxGetPr(ret); 
-  memcpy(ptr, obj.via.raw.ptr, obj.via.raw.size * sizeof(uint8_t));
+  mwSize dims[] = {obj.via.raw.size};
+  mxArray* ret = mxCreateCharArray(1, dims);
+  uint16_t *ptr = (uint16_t*)mxGetPr(ret); 
+  for (int i = 0; i < obj.via.raw.size; i++) {
+    ptr[i] = obj.via.raw.ptr[i];
+  }
   return ret;
 }
 
@@ -116,9 +111,7 @@ mxArray* mex_unpack_array(msgpack_object obj) {
         (obj.via.array.ptr[i].type > 0) and (obj.via.array.ptr[i].type < 5))
       types.insert(obj.via.array.ptr[i].type);
   int unique_type = *types.begin();
-  std::cout << types.size() << unique_type << std::endl;
   if (types.size() == 1) {
-    std::cout << "output array" << std::endl;
     mxArray *ret = NULL;
     bool * ptrb = NULL;
     double * ptrd = NULL;
