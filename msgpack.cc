@@ -27,8 +27,6 @@
 #include "mex.h"
 #include "matrix.h"
 
-bool debug = false;
-
 mxArray* mex_unpack_boolean(msgpack_object obj);
 mxArray* mex_unpack_positive_integer(msgpack_object obj);
 mxArray* mex_unpack_negative_integer(msgpack_object obj);
@@ -105,13 +103,15 @@ mxArray* mex_unpack_map(msgpack_object obj) {
 
 mxArray* mex_unpack_array(msgpack_object obj) {
   // validata array element type
-  std::set<int> types;
+  int types = 0;
+  int unique_type = -1;
   for (i = 0; i < obj.via.array.size; i++)
-    if ((types.find(obj.via.array.ptr[i].type) == types.end()) && 
-        (obj.via.array.ptr[i].type > 0) and (obj.via.array.ptr[i].type < 5))
-      types.insert(obj.via.array.ptr[i].type);
-  int unique_type = *types.begin();
-  if (types.size() == 1) {
+    if ((obj.via.array.ptr[i].type > 0) && (obj.via.array.ptr[i].type < 5) &&
+        (obj.via.array.ptr[i].type != unique_type)) {
+      unique_type = obj.via.array.ptr[i].type;
+      types ++;
+    }
+  if (types == 1) {
     mxArray *ret = NULL;
     bool * ptrb = NULL;
     double * ptrd = NULL;
