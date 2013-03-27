@@ -18,14 +18,14 @@
  *
  * */
 
-#include <set>
-#include <vector>
 #include <unistd.h>
-#include <stdio.h>
+#include <stdint.h>
 #include <msgpack.h>
 
 #include "mex.h"
 #include "matrix.h"
+
+#define MAX_PACK 1000000
 
 mxArray* mex_unpack_boolean(msgpack_object obj);
 mxArray* mex_unpack_positive_integer(msgpack_object obj);
@@ -318,6 +318,8 @@ void mex_pack(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
 }
 
 void mex_unpacker(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
+  mxArray * ret[MAX_PACK];
+  int npack = 0;
   /* Init deserialize using msgpack_unpacker */
   msgpack_unpacker pac;
   msgpack_unpacker_init(&pac, MSGPACK_UNPACKER_INIT_BUFFER_SIZE);
@@ -331,17 +333,18 @@ void mex_unpacker(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     msgpack_unpacker_buffer_consumed(&pac, size);
   
     /* start streaming deserialization */
-    std::vector<mxArray*> ret;
     msgpack_unpacked msg;
     msgpack_unpacked_init(&msg);
     while (msgpack_unpacker_next(&pac, &msg)) {
       /* prints the deserialized object. */
       msgpack_object obj = msg.data;
-      ret.push_back((*unPackMap[obj.type])(obj));
+      if (npack >= MAX_PACK)
+        mexErrMsgTxt("Too many packs");
+      ret[npack++] = (*unPackMap[obj.type])(obj);
     }
     /* set cell for output */
-    plhs[0] = mxCreateCellMatrix(ret.size(), 1);
-    for (i = 0; i < ret.size(); i++)
+    plhs[0] = mxCreateCellMatrix(npack, 1);
+    for (i = 0; i < npack; i++)
       mxSetCell((mxArray*)plhs[0], i, ret[i]);
   }
 }
