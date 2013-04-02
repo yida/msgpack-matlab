@@ -314,6 +314,27 @@ void mex_pack(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   msgpack_packer_free(pk);
 }
 
+void mex_pack_raw(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
+  /* creates buffer and serializer instance. */
+  msgpack_sbuffer* buffer = msgpack_sbuffer_new();
+  msgpack_packer* pk = msgpack_packer_new(buffer, msgpack_sbuffer_write);
+
+  for (i = 0; i < nrhs; i ++) {
+    size_t nElements = mxGetNumberOfElements(prhs[i]);
+    size_t sElements = mxGetElementSize(prhs[i]);
+    uint8_t *data = (uint8_t*)mxGetPr(prhs[i]);
+    msgpack_pack_raw(pk, nElements * sElements);
+    msgpack_pack_raw_body(pk, data, nElements * sElements);
+  }
+
+  plhs[0] = mxCreateNumericMatrix(1, buffer->size, mxUINT8_CLASS, mxREAL);
+  memcpy(mxGetPr(plhs[0]), buffer->data, buffer->size * sizeof(uint8_t));
+
+  /* cleaning */
+  msgpack_sbuffer_free(buffer);
+  msgpack_packer_free(pk);
+}
+
 void mex_unpacker(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxArray * ret[MAX_PACK];
   int npack = 0;
@@ -379,8 +400,15 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
   if ((nrhs < 1) || (!mxIsChar(prhs[0])))
     mexErrMsgTxt("Need to input string argument");
   char *fname = mxArrayToString(prhs[0]);
-  if (strcmp(fname, "pack") == 0)
-    mex_pack(nlhs, plhs, nrhs-1, prhs+1);
+  char *flag = new char[10];
+  if (strcmp(fname, "pack") == 0) {
+    if (mxIsChar(prhs[nrhs-1])) flag = mxArrayToString(prhs[nrhs-1]);
+    if (strcmp(flag, "raw") == 0)
+      mex_pack_raw(nlhs, plhs, nrhs-2, prhs+1);
+    else
+      mex_pack(nlhs, plhs, nrhs-1, prhs+1);
+
+  }
   else if (strcmp(fname, "unpack") == 0)
     mex_unpack(nlhs, plhs, nrhs-1, prhs+1);
   else if (strcmp(fname, "unpacker") == 0)
