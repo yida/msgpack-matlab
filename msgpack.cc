@@ -67,12 +67,10 @@ mxArray* mex_unpack_double(msgpack_object obj) {
 }
 
 mxArray* mex_unpack_raw(msgpack_object obj) {
-  mwSize dims[] = {obj.via.raw.size};
-  mxArray* ret = mxCreateCharArray(1, dims);
-  uint16_t *ptr = (uint16_t*)mxGetPr(ret); 
-  for (int i = 0; i < obj.via.raw.size; i++) {
+  mxArray* ret = mxCreateNumericMatrix(1,obj.via.raw.size, mxUINT8_CLASS, mxREAL);
+  uint8_t *ptr = (uint8_t*)mxGetPr(ret); 
+  for (int i = 0; i < obj.via.raw.size; i++)
     ptr[i] = obj.via.raw.ptr[i];
-  }
   return ret;
 }
 
