@@ -1,12 +1,15 @@
 clear all;
-filename = 'msg';
+filename = '~/Downloads/imuPrunedMP-03.16.2013.15.30.15-0';
 %
 fid = fopen(filename);
 data = fread( fid , '*uint8');
 
 fclose(fid);
 
-msgpack('unpack', data)
+a = msgpack('unpacker', data);
+
+sct = a{1}
+msgpack('pack', sct)
 
 %msg = msgpack('pack', [1,432,43.4]);
 %%msg = msgpack('pack', 'fafafaeew23f');
