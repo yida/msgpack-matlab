@@ -20,12 +20,12 @@
 
 #include <unistd.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <msgpack.h>
 
 #include "mex.h"
 #include "matrix.h"
-
-#define MAX_PACK 1000000
 
 mxArray* mex_unpack_boolean(msgpack_object obj);
 mxArray* mex_unpack_positive_integer(msgpack_object obj);
@@ -36,10 +36,33 @@ mxArray* mex_unpack_nil(msgpack_object obj);
 mxArray* mex_unpack_map(msgpack_object obj);
 mxArray* mex_unpack_array(msgpack_object obj);
 
+typedef struct mxArrayRes mxArrayRes;
+struct mxArrayRes {
+  mxArray * res;
+  mxArrayRes * next;
+};
+
 void (*PackMap[17]) (msgpack_packer *pk, int nrhs, const mxArray *prhs);
 mxArray* (*unPackMap[8]) (msgpack_object obj);
 
-//int i = 0;
+
+mxArrayRes * mxArrayRes_new(mxArrayRes * head, mxArray* res) {
+  mxArrayRes * ptr = head;
+  if (ptr == NULL) {
+    ptr = (mxArrayRes *)malloc(sizeof(mxArrayRes));
+    if (!ptr) mexErrMsgTxt("out of Memory!\n");
+    ptr->res = res;
+    ptr->next = NULL;
+    return ptr;
+  } else {
+    for (; ptr->next != NULL; ptr = ptr->next);
+    ptr->next = (mxArrayRes *)malloc(sizeof(mxArrayRes));
+    if (!ptr->next) mexErrMsgTxt("out of Memory!\n");
+    ptr->next->res = res;
+    ptr->next->next = NULL;
+  }
+  return head;
+}
 
 mxArray* mex_unpack_boolean(msgpack_object obj) {
   return mxCreateLogicalScalar(obj.via.boolean);
@@ -348,7 +371,7 @@ void mex_pack_raw(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
 }
 
 void mex_unpacker(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
-  mxArray * ret[MAX_PACK];
+  mxArrayRes * ret = NULL;
   int npack = 0;
   /* Init deserialize using msgpack_unpacker */
   msgpack_unpacker pac;
@@ -365,17 +388,27 @@ void mex_unpacker(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     /* start streaming deserialization */
     msgpack_unpacked msg;
     msgpack_unpacked_init(&msg);
-    while (msgpack_unpacker_next(&pac, &msg)) {
+    for (;msgpack_unpacker_next(&pac, &msg); npack++) {
+//    while (msgpack_unpacker_next(&pac, &msg)) {
       /* prints the deserialized object. */
       msgpack_object obj = msg.data;
-      if (npack >= MAX_PACK)
-        mexErrMsgTxt("Too many packs");
-      ret[npack++] = (*unPackMap[obj.type])(obj);
+      ret = mxArrayRes_new(ret, (*unPackMap[obj.type])(obj));
+//      npack++;
     }
     /* set cell for output */
     plhs[0] = mxCreateCellMatrix(npack, 1);
-    for (int i = 0; i < npack; i++)
-      mxSetCell((mxArray*)plhs[0], i, ret[i]);
+    int cellcount = 0;
+      if (!ret) {
+        mexErrMsgTxt("empty array\n");
+      }
+
+    for (; ret != NULL; ret = ret->next) {
+      if (!ret) {
+        mexErrMsgTxt("empty array\n");
+        exit(1);
+      }
+      mxSetCell((mxArray*)plhs[0], cellcount++, ret->res);
+    }
   }
 }
 
@@ -419,7 +452,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
       mex_pack_raw(nlhs, plhs, nrhs-2, prhs+1);
     else
       mex_pack(nlhs, plhs, nrhs-1, prhs+1);
-
   }
   else if (strcmp(fname, "unpack") == 0)
     mex_unpack(nlhs, plhs, nrhs-1, prhs+1);
