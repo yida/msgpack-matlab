@@ -116,22 +116,22 @@ mxArray* mex_unpack_array(msgpack_object obj) {
     uint64_t * ptru = NULL;
     switch (unique_type) {
       case 1:
-        ret = mxCreateLogicalMatrix(obj.via.array.size, 1);
+        ret = mxCreateLogicalMatrix(1, obj.via.array.size);
         ptrb = (bool*)mxGetPr(ret);
         for (int i = 0; i < obj.via.array.size; i++) ptrb[i] = obj.via.array.ptr[i].via.boolean;
         break;
       case 2:
-        ret = mxCreateNumericMatrix(obj.via.array.size, 1, mxUINT64_CLASS, mxREAL);
+        ret = mxCreateNumericMatrix(1, obj.via.array.size, mxUINT64_CLASS, mxREAL);
         ptru = (uint64_t*)mxGetPr(ret);
         for (int i = 0; i < obj.via.array.size; i++) ptru[i] = obj.via.array.ptr[i].via.u64;
         break;
       case 3:
-        ret = mxCreateNumericMatrix(obj.via.array.size, 1, mxINT64_CLASS, mxREAL);
+        ret = mxCreateNumericMatrix(1, obj.via.array.size, mxINT64_CLASS, mxREAL);
         ptri = (int64_t*)mxGetPr(ret);
         for (int i = 0; i < obj.via.array.size; i++) ptri[i] = obj.via.array.ptr[i].via.i64;
         break;
       case 4:
-        ret = mxCreateNumericMatrix(obj.via.array.size, 1, mxDOUBLE_CLASS, mxREAL);
+        ret = mxCreateNumericMatrix(1, obj.via.array.size, mxDOUBLE_CLASS, mxREAL);
         ptrd = mxGetPr(ret);
         for (int i = 0; i < obj.via.array.size; i++) ptrd[i] = obj.via.array.ptr[i].via.dec;
         break;
@@ -141,7 +141,7 @@ mxArray* mex_unpack_array(msgpack_object obj) {
     return ret;
   }
   else {
-    mxArray *ret = mxCreateCellMatrix(obj.via.array.size, 1);
+    mxArray *ret = mxCreateCellMatrix(1, obj.via.array.size);
     for (int i = 0; i < obj.via.array.size; i++) {
       msgpack_object ob = obj.via.array.ptr[i];
       mxSetCell(ret, i, (*unPackMap[ob.type])(ob));
