@@ -45,23 +45,11 @@ struct mxArrayRes {
 void (*PackMap[17]) (msgpack_packer *pk, int nrhs, const mxArray *prhs);
 mxArray* (*unPackMap[8]) (msgpack_object obj);
 
-
 mxArrayRes * mxArrayRes_new(mxArrayRes * head, mxArray* res) {
-  mxArrayRes * ptr = head;
-  if (ptr == NULL) {
-    ptr = (mxArrayRes *)malloc(sizeof(mxArrayRes));
-    if (!ptr) mexErrMsgTxt("out of Memory!\n");
-    ptr->res = res;
-    ptr->next = NULL;
-    return ptr;
-  } else {
-    for (; ptr->next != NULL; ptr = ptr->next);
-    ptr->next = (mxArrayRes *)malloc(sizeof(mxArrayRes));
-    if (!ptr->next) mexErrMsgTxt("out of Memory!\n");
-    ptr->next->res = res;
-    ptr->next->next = NULL;
-  }
-  return head;
+  mxArrayRes * new_res = (mxArrayRes *)malloc(sizeof(mxArrayRes));
+  new_res->res = res;
+  new_res->next = head;
+  return new_res;
 }
 
 mxArray* mex_unpack_boolean(msgpack_object obj) {
@@ -370,6 +358,12 @@ void mex_pack_raw(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   msgpack_packer_free(pk);
 }
 
+void mex_unpacker_set_cell(mxArray *plhs, int nlhs, mxArrayRes *res) {
+  if (nlhs > 0)
+    mex_unpacker_set_cell(plhs, nlhs-1, res->next);
+  mxSetCell(plhs, nlhs, res->res);
+}
+
 void mex_unpacker(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxArrayRes * ret = NULL;
   int npack = 0;
@@ -388,27 +382,16 @@ void mex_unpacker(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     /* start streaming deserialization */
     msgpack_unpacked msg;
     msgpack_unpacked_init(&msg);
-    for (;msgpack_unpacker_next(&pac, &msg); npack++) {
-//    while (msgpack_unpacker_next(&pac, &msg)) {
+    while (msgpack_unpacker_next(&pac, &msg)) {
       /* prints the deserialized object. */
       msgpack_object obj = msg.data;
       ret = mxArrayRes_new(ret, (*unPackMap[obj.type])(obj));
-//      npack++;
+      npack++;
     }
     /* set cell for output */
     plhs[0] = mxCreateCellMatrix(npack, 1);
-    int cellcount = 0;
-      if (!ret) {
-        mexErrMsgTxt("empty array\n");
-      }
-
-    for (; ret != NULL; ret = ret->next) {
-      if (!ret) {
-        mexErrMsgTxt("empty array\n");
-        exit(1);
-      }
-      mxSetCell((mxArray*)plhs[0], cellcount++, ret->res);
-    }
+  
+    mex_unpacker_set_cell((mxArray *)plhs[0], npack-1, ret);
   }
 }
 
