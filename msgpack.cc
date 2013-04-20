@@ -110,7 +110,7 @@ mxArray* mex_unpack_map(msgpack_object obj) {
 }
 
 mxArray* mex_unpack_array(msgpack_object obj) {
-  // validata array element type
+  /* validata array element type */
   int types = 0;
   int unique_type = -1;
   for (int i = 0; i < obj.via.array.size; i++)
@@ -290,7 +290,7 @@ void mex_pack_logical(msgpack_packer *pk, int nrhs, const mxArray *prhs) {
 void mex_pack_char(msgpack_packer *pk, int nrhs, const mxArray *prhs) {
   int nElements = mxGetNumberOfElements(prhs);
   uint8_t *data = (uint8_t*)mxGetPr(prhs); 
-  // matlab char type is actually uint16 -> 2 * uint8
+  /* matlab char type is actually uint16 -> 2 * uint8 */
   msgpack_pack_raw(pk, nElements * 2);
   msgpack_pack_raw_body(pk, data, nElements * 2);
 }
@@ -382,15 +382,13 @@ void mex_unpacker(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     /* start streaming deserialization */
     msgpack_unpacked msg;
     msgpack_unpacked_init(&msg);
-    while (msgpack_unpacker_next(&pac, &msg)) {
+    for (;msgpack_unpacker_next(&pac, &msg); npack++) {
       /* prints the deserialized object. */
       msgpack_object obj = msg.data;
       ret = mxArrayRes_new(ret, (*unPackMap[obj.type])(obj));
-      npack++;
     }
     /* set cell for output */
     plhs[0] = mxCreateCellMatrix(npack, 1);
-  
     mex_unpacker_set_cell((mxArray *)plhs[0], npack-1, ret);
   }
 }
