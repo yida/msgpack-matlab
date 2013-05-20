@@ -78,9 +78,18 @@ mxArray* mex_unpack_double(msgpack_object obj) {
 }
 
 mxArray* mex_unpack_raw(msgpack_object obj) {
+
   mxArray* ret = mxCreateNumericMatrix(1,obj.via.raw.size, mxUINT8_CLASS, mxREAL);
   uint8_t *ptr = (uint8_t*)mxGetPr(ret); 
   memcpy(ptr, obj.via.raw.ptr, obj.via.raw.size * sizeof(uint8_t));
+
+/*
+  const char **str_array = (const char **)mxMalloc(sizeof(const char *));
+  str_array[0] = obj.via.raw.ptr;
+  mxArray* ret = mxCreateCharMatrixFromStrings(1, str_array);
+  mxFree((void *)str_array);
+*/
+
   return ret;
 }
 
@@ -174,6 +183,7 @@ void mex_unpack(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
   /* prints the deserialized object. */
   msgpack_object obj = msg.data;
+
   plhs[0] = (*unPackMap[obj.type])(obj);
 }
 
@@ -288,11 +298,24 @@ void mex_pack_logical(msgpack_packer *pk, int nrhs, const mxArray *prhs) {
 }
 
 void mex_pack_char(msgpack_packer *pk, int nrhs, const mxArray *prhs) {
+  mwSize str_len = mxGetNumberOfElements(prhs) + 1;
+  char *buf = (char *)mxCalloc(str_len, sizeof(char));
+
+  if (mxGetString(prhs, buf, str_len) != 0)
+    mexErrMsgTxt("Could not convert to C string data");
+
+  msgpack_pack_raw(pk, str_len);
+  msgpack_pack_raw_body(pk, buf, str_len);
+
+/* uint8 input
   int nElements = mxGetNumberOfElements(prhs);
   uint8_t *data = (uint8_t*)mxGetPr(prhs); 
+*/
   /* matlab char type is actually uint16 -> 2 * uint8 */
+/* uint8 input
   msgpack_pack_raw(pk, nElements * 2);
   msgpack_pack_raw_body(pk, data, nElements * 2);
+*/
 }
 
 void mex_pack_cell(msgpack_packer *pk, int nrhs, const mxArray *prhs) {
