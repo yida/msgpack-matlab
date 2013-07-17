@@ -42,10 +42,15 @@ struct mxArrayRes {
   mxArrayRes * next;
 };
 
+#define DEFAULT_STR_SIZE 256
+/* preallocate str space for unpack raw */
+char *unpack_raw_str = (char *)mxMalloc(sizeof(char) * DEFAULT_STR_SIZE);
+
 void (*PackMap[17]) (msgpack_packer *pk, int nrhs, const mxArray *prhs);
 mxArray* (*unPackMap[8]) (msgpack_object obj);
 
 void mexExit(void) {
+//  mxFree((void *)unpack_raw_str);
   fprintf(stdout, "Existing Mex Msgpack \n");
   fflush(stdout);
 }
@@ -102,17 +107,17 @@ mxArray* mex_unpack_double(msgpack_object obj) {
 }
 
 mxArray* mex_unpack_raw(msgpack_object obj) {
-
+/*
   mxArray* ret = mxCreateNumericMatrix(1,obj.via.raw.size, mxUINT8_CLASS, mxREAL);
   uint8_t *ptr = (uint8_t*)mxGetPr(ret); 
   memcpy(ptr, obj.via.raw.ptr, obj.via.raw.size * sizeof(uint8_t));
+*/
+  if (obj.via.raw.size > DEFAULT_STR_SIZE)
+    mxRealloc(unpack_raw_str, sizeof(char) * obj.via.raw.size);
 
-/*
-  const char **str_array = (const char **)mxMalloc(sizeof(const char *));
-  str_array[0] = obj.via.raw.ptr;
-  mxArray* ret = mxCreateCharMatrixFromStrings(1, str_array);
-  mxFree((void *)str_array);
-  */
+  strncpy(unpack_raw_str, obj.via.raw.ptr, sizeof(char) * obj.via.raw.size);
+  unpack_raw_str[obj.via.raw.size] = '\0';
+  mxArray* ret = mxCreateString((const char *)unpack_raw_str);
 
   return ret;
 }
