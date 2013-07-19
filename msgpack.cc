@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <msgpack.h>
+#include <vector>
 
 #include "mex.h"
 #include "matrix.h"
@@ -458,6 +459,37 @@ void mex_unpacker(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxArrayRes_free(ret);
 }
 
+std::vector<mxArray *> cells;
+void mex_unpacker_std(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
+  int npack = 0;
+  /* Init deserialize using msgpack_unpacker */
+  msgpack_unpacker pac;
+  msgpack_unpacker_init(&pac, MSGPACK_UNPACKER_INIT_BUFFER_SIZE);
+
+  const char *str = (const char*)mxGetPr(prhs[0]);
+  int size = mxGetM(prhs[0]) * mxGetN(prhs[0]);
+  if (size) {
+    /* feeds the buffer */
+    msgpack_unpacker_reserve_buffer(&pac, size);
+    memcpy(msgpack_unpacker_buffer(&pac), str, size);
+    msgpack_unpacker_buffer_consumed(&pac, size);
+  
+    /* start streaming deserialization */
+    msgpack_unpacked msg;
+    msgpack_unpacked_init(&msg);
+    for (;msgpack_unpacker_next(&pac, &msg); npack++) {
+      /* prints the deserialized object. */
+      msgpack_object obj = msg.data;
+      cells.push_back((*unPackMap[obj.type])(obj));
+    }
+    /* set cell for output */
+    plhs[0] = mxCreateCellMatrix(1, npack);
+    for (int i = 0; i < cells.size(); i++)
+      mxSetCell(plhs[0], i, cells[i]);
+    cells.clear();
+  }
+}
+
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
   static bool init = false;
@@ -508,7 +540,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
   else if (strcmp(fname, "unpack") == 0)
     mex_unpack(nlhs, plhs, nrhs-1, prhs+1);
   else if (strcmp(fname, "unpacker") == 0)
-    mex_unpacker(nlhs, plhs, nrhs-1, prhs+1);
+    mex_unpacker_std(nlhs, plhs, nrhs-1, prhs+1);
+//  else if (strcmp(fname, "unpacker_std") == 0)
+//    mex_unpacker_std(nlhs, plhs, nrhs-1, prhs+1);
   else
     mexErrMsgTxt("Unknown function argument");
 }
