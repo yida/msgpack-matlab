@@ -22,20 +22,36 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#define MSGPACK_USE_LEGACY_NAME_AS_FLOAT  // Allows use of old float names
 #include <msgpack.h>
 #include <vector>
 
 #include "mex.h"
 #include "matrix.h"
 
+#if (MSGPACK_VERSION_MAJOR < 1)
+#define MSGPACK_OBJECT_STR MSGPACK_OBJECT_RAW
+#define MP_RAWSTR(obj) obj.via.raw
+#define MP_PACK_STR(pk, sz) msgpack_pack_raw(pk, sz)
+#define MP_PACK_STR_BODY(pk, ptr, sz) msgpack_pack_raw_body(pk, ptr, sz)
+#define MSGPACK_OBJECT_BIN 0x08
+#define MSGPACK_OBJECT_EXT 0x09
+#else
+#define MP_RAWSTR(obj) obj.via.str
+#define MP_PACK_STR(pk, sz) msgpack_pack_str(pk, sz)
+#define MP_PACK_STR_BODY(pk, ptr, sz) msgpack_pack_str_body(pk, ptr, sz)
+#endif
+
 mxArray* mex_unpack_boolean(msgpack_object obj);
 mxArray* mex_unpack_positive_integer(msgpack_object obj);
 mxArray* mex_unpack_negative_integer(msgpack_object obj);
 mxArray* mex_unpack_double(msgpack_object obj);
-mxArray* mex_unpack_raw(msgpack_object obj);
+mxArray* mex_unpack_str(msgpack_object obj);
 mxArray* mex_unpack_nil(msgpack_object obj);
 mxArray* mex_unpack_map(msgpack_object obj);
 mxArray* mex_unpack_array(msgpack_object obj);
+mxArray* mex_unpack_bin(msgpack_object obj);
+mxArray* mex_unpack_ext(msgpack_object obj);
 
 typedef struct mxArrayRes mxArrayRes;
 struct mxArrayRes {
@@ -48,7 +64,7 @@ struct mxArrayRes {
 char *unpack_raw_str = (char *)mxMalloc(sizeof(char) * DEFAULT_STR_SIZE);
 
 void (*PackMap[17]) (msgpack_packer *pk, int nrhs, const mxArray *prhs);
-mxArray* (*unPackMap[8]) (msgpack_object obj);
+mxArray* (*unPackMap[10]) (msgpack_object obj);
 
 void mexExit(void) {
 //  mxFree((void *)unpack_raw_str);
@@ -107,17 +123,17 @@ mxArray* mex_unpack_double(msgpack_object obj) {
   return mxCreateDoubleScalar(obj.via.dec);
 }
 
-mxArray* mex_unpack_raw(msgpack_object obj) {
+mxArray* mex_unpack_str(msgpack_object obj) {
 /*
   mxArray* ret = mxCreateNumericMatrix(1,obj.via.raw.size, mxUINT8_CLASS, mxREAL);
   uint8_t *ptr = (uint8_t*)mxGetPr(ret); 
   memcpy(ptr, obj.via.raw.ptr, obj.via.raw.size * sizeof(uint8_t));
 */
-  if (obj.via.raw.size > DEFAULT_STR_SIZE)
-    mxRealloc(unpack_raw_str, sizeof(char) * obj.via.raw.size);
+  if (MP_RAWSTR(obj).size > DEFAULT_STR_SIZE)
+    mxRealloc(unpack_raw_str, sizeof(char) * MP_RAWSTR(obj).size);
 
-  strncpy(unpack_raw_str, obj.via.raw.ptr, sizeof(char) * obj.via.raw.size);
-  unpack_raw_str[obj.via.raw.size] = '\0';
+  strncpy(unpack_raw_str, MP_RAWSTR(obj).ptr, sizeof(char) * MP_RAWSTR(obj).size);
+  unpack_raw_str[MP_RAWSTR(obj).size] = '\0';
   mxArray* ret = mxCreateString((const char *)unpack_raw_str);
 
   return ret;
@@ -135,11 +151,11 @@ mxArray* mex_unpack_map(msgpack_object obj) {
   char **field_name = (char **)mxCalloc(nfields, sizeof(char *));
   for (int i = 0; i < nfields; i++) {
     struct msgpack_object_kv obj_kv = obj.via.map.ptr[i];
-    if (obj_kv.key.type == MSGPACK_OBJECT_RAW) {
+    if (obj_kv.key.type == MSGPACK_OBJECT_STR) {
       /* the raw size from msgpack only counts actual characters
        * but C char array need end with \0 */
-      field_name[i] = (char*)mxCalloc(obj_kv.key.via.raw.size + 1, sizeof(char));
-      memcpy((char*)field_name[i], obj_kv.key.via.raw.ptr, obj_kv.key.via.raw.size * sizeof(char));
+      field_name[i] = (char*)mxCalloc(MP_RAWSTR(obj_kv.key).size + 1, sizeof(char));
+      memcpy((char*)field_name[i], MP_RAWSTR(obj_kv.key).ptr, MP_RAWSTR(obj_kv.key).size * sizeof(char));
     } else {
       mexPrintf("not string key\n");
     }
@@ -208,6 +224,41 @@ mxArray* mex_unpack_array(msgpack_object obj) {
     return ret;
   }
 }
+
+#if MSGPACK_VERSION_MAJOR >= 1
+mxArray* mex_unpack_bin(msgpack_object obj){
+  mxArray* ret = mxCreateNumericMatrix(1, obj.via.bin.size, mxUINT8_CLASS, mxREAL);
+  uint8_t *ptr = (uint8_t*)mxGetData(ret); 
+  memcpy(ptr, obj.via.bin.ptr, obj.via.bin.size * sizeof(uint8_t));
+  return ret;
+}
+
+mxArray* mex_unpack_ext(msgpack_object obj){
+  mxArray* ret = mxCreateCellMatrix(1, 2);
+  mxArray* exttype = mxCreateDoubleScalar(obj.via.ext.type);
+  mxArray* data = mxCreateNumericMatrix(1, obj.via.ext.size, mxUINT8_CLASS, mxREAL);
+  uint8_t *ptr = (uint8_t*)mxGetData(data); 
+  memcpy(ptr, obj.via.ext.ptr, obj.via.ext.size * sizeof(uint8_t));
+  mxSetCell(ret, 0, exttype);
+  mxSetCell(ret, 1, data);
+  return ret;
+}
+#else
+mxArray* mex_unpack_bin(msgpack_object obj){
+  mexWarnMsgIdAndTxt(
+    "msgpack_matlab:unsupported_BIN_type", 
+    "msgpack-matlab has been compiled with a version of msgpack-c (%s) that"
+      " does not support the BIN type.", MSGPACK_VERSION);
+  return mex_unpack_nil(obj);
+}
+mxArray* mex_unpack_ext(msgpack_object obj){
+  mexWarnMsgIdAndTxt(
+    "msgpack_matlab:unsupported_EXT_type", 
+    "msgpack-matlab has been compiled with a version of msgpack-c (%s) that"
+      " does not support the EXT type.", MSGPACK_VERSION);
+  return mex_unpack_nil(obj);
+}
+#endif // #if MSGPACK_VERSION_MAJOR >= 1
 
 void mex_unpack(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) 
 {
@@ -343,8 +394,8 @@ void mex_pack_char(msgpack_packer *pk, int nrhs, const mxArray *prhs) {
   if (mxGetString(prhs, buf, str_len) != 0)
     mexErrMsgTxt("Could not convert to C string data");
 
-  msgpack_pack_raw(pk, str_len);
-  msgpack_pack_raw_body(pk, buf, str_len);
+  MP_PACK_STR(pk, str_len);
+  MP_PACK_STR_BODY(pk, buf, str_len);
 
   mxFree(buf);
 
@@ -377,8 +428,8 @@ void mex_pack_struct(msgpack_packer *pk, int nrhs, const mxArray *prhs) {
   for (int i = 0; i < nField; i++) {
     fname = mxGetFieldNameByNumber(prhs, i);
     fnameLen = strlen(fname);
-    msgpack_pack_raw(pk, fnameLen);
-    msgpack_pack_raw_body(pk, fname, fnameLen);
+    MP_PACK_STR(pk, fnameLen);
+    MP_PACK_STR_BODY(pk, fname, fnameLen);
     ifield = mxGetFieldNumber(prhs, fname);
     mxArray* pm = mxGetFieldByNumber(prhs, 0, ifield);
     (*PackMap[mxGetClassID(pm)])(pk, nrhs, pm);
@@ -410,8 +461,8 @@ void mex_pack_raw(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     size_t nElements = mxGetNumberOfElements(prhs[i]);
     size_t sElements = mxGetElementSize(prhs[i]);
     uint8_t *data = (uint8_t*)mxGetPr(prhs[i]);
-    msgpack_pack_raw(pk, nElements * sElements);
-    msgpack_pack_raw_body(pk, data, nElements * sElements);
+    MP_PACK_STR(pk, nElements * sElements);
+    MP_PACK_STR_BODY(pk, data, nElements * sElements);
   }
 
   plhs[0] = mxCreateNumericMatrix(1, buffer->size, mxUINT8_CLASS, mxREAL);
@@ -500,9 +551,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     unPackMap[MSGPACK_OBJECT_POSITIVE_INTEGER] = mex_unpack_positive_integer;
     unPackMap[MSGPACK_OBJECT_NEGATIVE_INTEGER] = mex_unpack_negative_integer;
     unPackMap[MSGPACK_OBJECT_DOUBLE] = mex_unpack_double;
-    unPackMap[MSGPACK_OBJECT_RAW] = mex_unpack_raw;
+    unPackMap[MSGPACK_OBJECT_STR] = mex_unpack_str;
     unPackMap[MSGPACK_OBJECT_ARRAY] = mex_unpack_array;
-    unPackMap[MSGPACK_OBJECT_MAP] = mex_unpack_map; 
+    unPackMap[MSGPACK_OBJECT_MAP] = mex_unpack_map;
+    unPackMap[MSGPACK_OBJECT_BIN] = mex_unpack_bin;
+    unPackMap[MSGPACK_OBJECT_EXT] = mex_unpack_ext;
 
     PackMap[mxUNKNOWN_CLASS] = mex_pack_unknown;
     PackMap[mxVOID_CLASS] = mex_pack_void;
